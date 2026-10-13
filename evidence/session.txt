@@ -1,0 +1,438 @@
+﻿SESIÓN 20 · TOR, I2P Y REDES DE ANONIMATO
+=========================================
+
+
+Módulo 10 — Privacy, Messaging & Identity · Acto III · CS031
+
+
+Tesis de la semana: las redes de anonimato esconden metadata — quién habla con quién —, no solo el payload. HTTPS cifra el qué; Tor e I2P intentan esconder el quién ↔ quién. Tor lo hace con onion circuits de tres relays que salen al clearnet por un exit; I2P lo hace con garlic routing y tunnels unidireccionales dentro de su propia red. El anonimato es a la vez una feature de libertad civil y un amplificador de daño. Y “usamos Tor” no borra deberes PSAV si el venture es Persona Obligada bajo Decreto 15-2026.
+
+
+Límite con S19: la semana pasada construyeron discovery P2P (Kademlia, BitTorrent, Hyperswarm) y debatieron hacia dónde se mueve la liability sin servidor. Vieron que P2P no esconde metadata: cada peer ve la IP de su contraparte. Hoy no re-enseñan DHT ni Lab 16. Límite con S21: la próxima sesión es Signal / WireGuard — confidencialidad del contenido y tunnels. Hoy no enseñan end-to-end encryption de mensajería como core; solo la mencionan como contraste (“payload” vs “metadata”).
+
+
+---
+
+
+0. Puente
+---------
+
+
+Viniendo de: Sesión 19 — P2P: Kademlia, BitTorrent y Pear. Lab 16: dos peers en un topic de Hyperswarm, mensaje directo, experimento kill-seeder, P2P.md. Debate: ¿las apps serverless P2P mueven liability de companies a users? Terminaron con una pregunta abierta en el journal: ¿qué vio su peer de ustedes? Respuesta: su IP, su topic, sus tiempos de conexión. Quitar el servidor no quita la metadata; la reparte.
+
+
+Hoy: abre Módulo 10. Qué es metadata y por qué importa; definir Tor desde cero (qué es / qué no es / cómo se usa) y onion routing: guard → middle → exit → clearnet, qué ve cada hop; garlic routing (I2P): tunnels unidireccionales dentro de la red; límites (correlation, exit malicioso, fingerprinting, login); ley y diseño (15-2026); Lab 17 kickoff con Tor Browser oficial; moción sobre anonimato como libertad civil neta; memo del venture: ¿anonimato, confidencialidad o ninguno?
+
+
+Hacia dónde vamos: Sesión 21 — Signal / WireGuard: del quién habla con quién (hoy) al qué se dice y cómo se tunelea (confidencialidad). El spine de venture de Módulo 10 empieza hoy: privacy / identity como producto. Lo que no puedan separar hoy (anonimato de usuario vs confidencialidad de payload) contamina todo el módulo.
+
+
+---
+
+
+1. Objetivos de la sesión
+-------------------------
+
+
+1. Distinguir payload de metadata y explicar, con un ejemplo de su venture, por qué la metadata sola puede revelar lo sensible (quién, cuándo, con quién, cuánto).
+2. Definir Tor desde cero (qué es, qué no es, cómo se usa en este curso) y explicar onion routing: circuito de tres relays (guard, middle, exit), cifrado en capas, qué puede y qué no puede ver cada hop y el destino.
+3. Explicar garlic routing en I2P a nivel conceptual: tunnels inbound/outbound unidireccionales, netDb distribuida, servicios dentro de la red, y contrastarlo con el modelo Tor de salida al clearnet.
+4. Nombrar al menos tres límites de Tor: correlation end-to-end (no defiende contra un adversario que ve ambos extremos), exit malicioso sobre tráfico sin HTTPS, y deanonimización por capa de aplicación (login, fingerprinting, otras apps fuera de Tor Browser).
+5. Completar el kickoff de Lab 17 (Tor Browser oficial + circuit display) y el memo de threat model comparando Tor vs I2P vs “solo HTTPS”.
+6. Tomar postura sobre la moción (anonimato como libertad civil neta aun cuando habilita daño), con menú F/A anclado en arquitectura, cross-ex y tally.
+7. Redactar el memo de venture: ¿el producto necesita anonimato de usuarios, confidencialidad del payload, o ninguno? Qué NO prometen. Una oración sobre 15-2026.
+
+
+---
+
+
+2. Paquete pre-clase
+--------------------
+
+
+Lab: lean §4. Antes de clase descarguen Tor Browser solo desde el sitio oficial: https://www.torproject.org/download/ — no de mirrors, app stores no oficiales ni links de chats. Instálenlo, pero no lo configuren más allá del default. Si la red de la universidad bloquea Tor, no la evadan: documenten el bloqueo y usen la red que el instructor autorice en clase.
+
+
+Conceptos (skim, todos oficiales):
+
+
+1. Tor Project — Overview (qué es Tor, por qué existe, red distribuida): https://support.torproject.org/about-tor/how-tor-works/overview/
+2. Tor Project — HTTPS encryption and Tor (visualización de qué ve un observador con/sin Tor y con/sin HTTPS): https://support.torproject.org/about-tor/security/https-encryption-and-tor/
+3. Tor Project — Types of relays (guard, middle, exit, bridge; exposición legal del exit): https://community.torproject.org/relay/types-of-relays/
+4. I2P — “A Scalable Framework for Anonymous Communication” (intro oficial de arquitectura: tunnels, netDb, garlic encryption, comparación con Tor): https://i2p.net/en/docs/overview/intro/
+
+
+Ley viva (Guatemala) — mismo lock que S16–S19:
+
+
+1. Decreto 15-2026: ley viva desde ~17 Sep 2026. PSAV = Personas Obligadas bajo IVE / SIB. Reglamento del art. 127: pendiente. Iniciativa 6538 NO es ley.
+2. Si el venture es Persona Obligada, KYC / registro / reportes no dependen de la IP del cliente. Que el usuario llegue por Tor (o que el producto use Tor) no exime al venture de identificar al cliente según el régimen aplicable.
+3. No hay en el paquete de clase una norma guatemalteca que “prohíba” o “garantice” Tor. No la inventen. Razonen con el perímetro PSAV y con lecturas de libertad marcadas como tales.
+
+
+Debate: lean §5. Postura bloqueada antes de clase (90–140 palabras, F o A, ≥2 fuentes — una técnica de Tor/I2P de las lecturas oficiales y una de libertad civil o del paquete 15-2026).
+
+
+---
+
+
+3. Contenido técnico — metadata, onion y garlic
+-----------------------------------------------
+
+
+3.1 Payload vs metadata
+
+
+- Payload: el contenido (el mensaje, el archivo, el JSON de la orden).
+- Metadata: todo lo demás — quién se conecta, a qué destino, cuándo, con qué frecuencia, cuántos bytes, desde qué red.
+- HTTPS (TLS) cifra el payload entre su navegador y el sitio. Pero su ISP, la red de la universidad y cualquier observador en el camino siguen viendo su IP y a qué servidor se conectan (IP del destino y, típicamente, el hostname). El sitio ve su IP.
+- Ejemplo de clase: “Una usuaria se conectó a las 2:13 a.m. al portal de denuncias de una ONG, tres noches seguidas” es sensible aunque nadie lea el contenido. Metadata sola puede bastar para identificar a una fuente, un paciente o un cliente.
+
+
+Frase de contraste: HTTPS esconde el qué; una red de anonimato intenta esconder el quién ↔ quién. Son propiedades distintas y se combinan.
+
+
+3.2 Tor: definición desde cero y onion routing
+
+
+#### Qué es Tor
+
+
+- Nombre completo: Tor = The Onion Router.
+- Qué es: una red de voluntarios (miles de relays) más un software libre mantenido por el Tor Project. Cualquiera puede correr un relay; los clientes eligen un camino a través de la red.
+- Problema que resuelve: no solo el payload (el contenido — eso lo cifra HTTPS/TLS). Resuelve el problema de la metadata: quién se conecta con quién. En una conexión normal, su ISP y el sitio ven su IP y el destino. Tor reparte ese conocimiento entre varios hops para que ningún relay individual conozca a la vez el origen y el destino.
+- Cómo se organiza: los clientes descargan un consenso firmado por un pequeño conjunto de directory authorities que lista los relays disponibles.
+
+
+#### Qué NO es Tor
+
+
+- No es un VPN con un solo operador. Un VPN concentra la confianza: el operador ve su IP y su destino. Tor reparte esa confianza entre tres relays voluntarios; ninguno tiene ambos extremos.
+- No es sinónimo de “dark web”. Tor sirve sobre todo para salir al clearnet (internet normal) con más privacidad de metadata. Los onion services (.onion) existen, pero no son “Tor” entero ni el foco de este curso.
+- No hace mágicamente anónima a una persona que inicia sesión con su cuenta, reutiliza cookies, descarga un archivo y lo abre fuera de Tor Browser, o mezcla tráfico identificado y anónimo. El anonimato de red no borra la identidad que ustedes revelan en la capa de aplicación.
+
+
+#### Cómo se usa en este curso
+
+
+- Solo Tor Browser oficial, descargado desde https://www.torproject.org/download/ (no mirrors, no app stores no oficiales).
+- Configuración por defecto. No reconfiguren la selección de nodos; no usen bridges para saltar el bloqueo de la universidad.
+- Lab 17 = observar el circuit display y escribir un threat model. No hostean onion services ni corren relays.
+
+
+#### Onion routing (mecánica)
+
+
+- Circuito: el cliente (Tor Browser) elige tres relays: guard (entrada), middle, exit. Flujo: Tor User → Guard Relay → Middle Relay → Exit Relay → Destination (clearnet).
+- Cifrado en capas (onion): el cliente cifra el tráfico tres veces, una capa por relay. Cada relay quita su capa y solo aprende el siguiente salto. Ningún relay individual conoce a la vez el origen y el destino.
+- Guard estable: el guard cambia cada 2–3 meses (no en cada sitio) para reducir el riesgo de caer, con el tiempo, en un guard controlado por un adversario. Middle y exit cambian por dominio.
+- Aislamiento por sitio: Tor Browser usa circuitos distintos para dominios distintos en la barra de URL, para que un tracker de terceros no ligue su actividad entre sitios.
+- Onion services (.onion): permiten publicar un servicio sin revelar su ubicación; el tráfico no sale por un exit. Hoy solo los nombran conceptualmente — no forman parte del lab.
+
+
+3.3 Qué ve cada hop (tabla que deben poder reconstruir de memoria)
+
+
+| Punto | Ve | No ve |
+|---|---|---|
+| Red local / ISP | Su IP; que usan Tor; la IP del guard; volumen y tiempos | Destino; contenido |
+| Guard | Su IP; la IP del middle; volumen y tiempos | Destino; contenido |
+| Middle | IP del guard; IP del exit | Su IP; destino; contenido |
+| Exit | Destino (hostname / IP); IP del middle; con HTTPS: solo bytes cifrados; sin HTTPS: el contenido completo | Su IP |
+| Sitio destino | IP del exit; lo que ustedes le digan (login, cookies, formularios) | Su IP real (salvo que la revelen en la capa de aplicación) |
+
+
+3.4 Límites de Tor (lo que Tor dice que NO hace)
+
+
+1. Correlation end-to-end: si un observador ve a la vez su entrada a la red y el exit (o el destino), puede correlacionar tiempos. Tor lo declara fuera de su threat model. Por eso decimos: Tor asume que no hay un adversario global pasivo.
+2. Exit malicioso: el exit ve y puede alterar tráfico no cifrado. Con HTTPS, ve destino pero no contenido.
+3. Capa de aplicación: si inician sesión con su cuenta, el sitio sabe quiénes son. Fingerprinting del navegador, plugins y archivos descargados abiertos fuera de Tor pueden revelar identidad.
+4. Solo Tor Browser va por Tor: las otras apps de su laptop no están protegidas.
+5. Reutilización de circuitos: mezclar tráfico identificado y anónimo por el mismo circuito permite ligarlos en el exit.
+6. Visibilidad del uso: su ISP sabe que usan Tor (los relays son públicos). Esto importa en redes que bloquean o vigilan Tor.
+
+
+3.5 I2P: garlic routing dentro de su propia red
+
+
+- Diseño: I2P es una red de mensajes (packet-switched), pensada principalmente para servicios dentro de la red (eepsites, mensajería, file sharing). Tor está optimizado para salir rápido al clearnet; I2P para ser una red resiliente en sí misma. Existen outproxies, pero no son el foco del diseño.
+- Tunnels unidireccionales: cada router construye tunnels outbound (para enviar) y inbound (para recibir). Una petición y su respuesta viajan por caminos distintos — a diferencia del circuito bidireccional de Tor.
+- netDb: base de datos distribuida (sin directory authorities centrales) donde se publican routerInfos y leaseSets (los inbound tunnel gateways actuales de un destino).
+- Flujo (de la intro oficial): Alice busca en la netDb el leaseSet de Bob → envía por uno de sus outbound tunnels → el endpoint lo reenvía a un inbound gateway de Bob → baja por el inbound tunnel hasta Bob.
+- Garlic encryption: Alice puede empaquetar varios mensajes (“cloves”) en un solo “garlic message” cifrado a la key del destino, así los peers intermedios no saben cuántos mensajes van dentro, qué dicen ni a dónde va cada clove.
+- Contraste en una frase: Tor = tres relays y un exit hacia internet abierto; I2P = tunnels de ida y vuelta separados, dentro de una red cerrada, sin exit como caso por defecto.
+
+
+3.6 Glosario mínimo
+
+
+| Término | Expansión (EN) | Qué es aquí |
+|---|---|---|
+| Tor | The Onion Router | Red de voluntarios + software libre del Tor Project; esconde metadata (quién↔quién), no solo el payload. |
+| I2P | Invisible Internet Project | Red de anonimato orientada a servicios dentro de la red (garlic routing, tunnels unidireccionales). |
+| HTTPS | Hypertext Transfer Protocol Secure | HTTP sobre TLS: cifra el payload entre navegador y sitio; no esconde quién habla con quién. |
+| TLS | Transport Layer Security | Capa de cifrado del canal (bajo HTTPS). Protege contenido en tránsito; no anonimiza IPs. |
+| ISP | Internet Service Provider | Proveedor de internet (o red de la universidad): ve su IP y, sin Tor, el destino. |
+| IP | Internet Protocol (address) | Identificador de red de un dispositivo o servidor. Metadata clave: quién y a dónde. |
+| VPN | Virtual Private Network | Túnel a un solo operador que ve su IP y su destino. Contraste: Tor reparte esa confianza. |
+| KYC | Know Your Customer | Deber de identificar al cliente. Si son Persona Obligada, Tor no lo borra. |
+| E2E | End-to-End (encryption) | Cifrado extremo a extremo del payload (p. ej. Signal). Tema de S21; contraste con metadata. |
+| DHT | Distributed Hash Table | Tabla hash distribuida (Kademlia en S19). P2P discovery; no esconde metadata de peer↔peer. |
+| URL | Uniform Resource Locator | Dirección de un recurso (p. ej. en la barra del navegador). Tor Browser aisla circuitos por dominio/URL. |
+| Metadata | — (no es acrónimo) | Quién, a quién, cuándo, cuánto. No es el contenido. |
+| Onion routing | — | Cifrado en capas a través de varios relays; cada uno quita una capa. |
+| Circuit | — | Camino de tres relays que Tor Browser arma para un sitio. |
+| Relay | — | Servidor voluntario de la red Tor (guard, middle o exit). |
+| Guard | — (entry guard) | Primer relay; ve su IP. Estable 2–3 meses. |
+| Exit | — (exit relay) | Último relay; habla con el clearnet; ve destino y, sin HTTPS, contenido. |
+| Bridge | — | Relay no listado públicamente, usado donde Tor está bloqueado. Solo concepto en este curso. |
+| Onion service | — (.onion) | Servicio accesible solo dentro de Tor, sin revelar su ubicación. Solo concepto en este curso. |
+| Garlic routing | — | Esquema de I2P: varios mensajes (“cloves”) cifrados juntos, enviados por tunnels unidireccionales. |
+| Tunnel (I2P) | — | Camino unidireccional (inbound u outbound) de varios routers. |
+| netDb | network Database | Base de datos distribuida de I2P (routerInfos, leaseSets). |
+| Clearnet | — | Internet “normal”, fuera de Tor / I2P. |
+| Global passive adversary | — | Observador capaz de ver gran parte de la red a la vez. Tor no defiende contra él. |
+| PSAV | Prestadores de Servicios de Activos Virtuales (ES; ≈ VASP — Virtual Asset Service Provider) | En GT: Personas Obligadas bajo IVE / SIB (Decreto 15-2026). “Usamos Tor” ≠ compliance KYC. |
+| IVE | Intendencia de Verificación Especial (ES; unidad de supervisión financiera / AML en Guatemala) | Autoridad de supervisión en el perímetro 15-2026; no inventen competencias fuera del paquete. |
+| SIB | Superintendencia de Bancos (ES; ≈ banking / financial supervisor) | Supervisor financiero en Guatemala; ancla del régimen PSAV / Personas Obligadas. |
+
+
+3.7 Ley y diseño: “usamos Tor” no es compliance
+
+
+- Anonimato de red ≠ anonimato legal del cliente. Si el venture es Persona Obligada / PSAV bajo Decreto 15-2026, el deber de identificar clientes, registrar y reportar no cambia porque la conexión llegue desde un exit de Tor o porque el producto ofrezca acceso por Tor.
+- Lo inverso también es cierto: ofrecer acceso vía Tor para proteger a usuarios de vigilancia de red es compatible con hacer KYC — protege a la persona de observadores en el camino, no de su proveedor regulado.
+- Exits y operadores: el Tor Project advierte que los operadores de exit relays tienen la mayor exposición legal (las quejas de abuso llegan a ellos). En este curso nadie corre exit relays ni onion services como parte del lab.
+- No inventen: no hay en el paquete una norma GT específica sobre Tor; el reglamento del art. 127 de 15-2026 está pendiente; Iniciativa 6538 no es ley. Marquen la incertidumbre para counsel.
+
+
+Fuera de alcance: E2E messaging / Signal protocol y WireGuard (S21); correr relays, bridges u onion services; mixnets en detalle; evadir controles de red de cualquier institución.
+
+
+---
+
+
+4. BUILD — Lab 17: Tor Browser, circuit display y threat model
+--------------------------------------------------------------
+
+
+Stack: Tor Browser oficial (torproject.org) · navegador normal para contraste · (opcional) lectura de I2P
+
+
+Continuidad: Lab 15 (S18) les dio un CID pinneado — quién guarda los bits. Lab 16 (S19) les dio un canal P2P directo — quién mueve los bits, y vieron que su peer ve su IP. Lab 17 pregunta quién ve que ustedes se comunican y qué cuesta esconderlo.
+
+
+Límites del lab (no negociables): solo Tor Browser oficial, en modo default; solo sitios clearnet HTTPS públicos y legales; no correr relays, bridges ni onion services; no visitar mercados ni servicios ilícitos; no usar Tor para evadir los controles de red de la universidad ni de ninguna institución; no reconfigurar la selección de nodos (el propio Tor Project lo desaconseja).
+
+
+Acerca de este lab
+
+
+Tor no es “un VPN más lento”. Un VPN mueve la confianza a un solo operador que ve su IP y su destino. Tor reparte ese conocimiento entre tres relays para que ninguno tenga ambos. Hoy lo verán en pantalla: Tor Browser muestra el circuito que usa para la pestaña actual. Su trabajo es convertir esa pantalla en una tabla de quién-ve-qué, y luego usar esa tabla para tomar una decisión de producto.
+
+
+⚡ Kickoff en clase (~30 min) — circuit display
+
+
+Parte A — conectar y observar (15 min)
+
+
+1. Abran Tor Browser (descargado de https://www.torproject.org/download/) y conecten con la configuración por defecto. Si la red del aula bloquea Tor, anoten el error y esperen la red autorizada por el instructor — no usen bridges para saltar el bloqueo.
+2. Visiten un sitio HTTPS público acordado en el pizarrón (p. ej. https://www.torproject.org/ o la página de la universidad).
+3. Abran el menú de información del sitio en la barra de URL y vean el circuit display: anoten país / tipo de cada hop (guard, relays intermedios, destino). No peguen IPs completas en el chat público.
+4. Usen “New Tor Circuit for this Site” y anoten qué cambió y qué no (pista: el guard).
+
+
+Parte B — tabla quién-ve-qué (15 min)
+
+
+1. Para su circuito real, llenen la tabla de §3.3 con sus propias palabras: qué ve su red local, el guard, el middle, el exit y el sitio.
+2. Abran el mismo sitio en su navegador normal. ¿Qué ve ahora el sitio? ¿Y la red de la universidad?
+3. Una frase: “si el exit fuera malicioso, con este sitio HTTPS podría ver ___ y no podría ver ___”.
+
+
+Al final de los 30 min: dos líneas en el chat de lab — “connected: sí/no” + “el exit ve: ___”.
+
+
+Homework — THREAT.md (threat-model memo, 1–2 páginas)
+
+
+Elijan un data flow real de su venture (login, envío de una orden, subida de un documento, mensaje a soporte) y compárenlo en tres columnas:
+
+
+| Pregunta | Solo HTTPS | Tor (clearnet vía exit) | I2P (in-net) |
+|---|---|---|---|
+| ¿Quién aprende la IP del usuario? | | | |
+| ¿Quién aprende el destino? | | | |
+| ¿Quién puede leer el payload? | | | |
+| ¿Qué se rompe si el exit / un relay es malicioso? | | | |
+| ¿Qué se rompe si el usuario inicia sesión? | | | |
+| Costo para el usuario (latencia, fricción, bloqueos) | | | |
+| ¿Qué sigue viendo el venture (y debe ver si es Persona Obligada)? | | | |
+
+
+Además:
+
+
+1. Un párrafo: ¿contra qué adversario defiende cada columna (ISP, red local, sitio, gobierno con visibilidad parcial)? ¿Contra cuál no (correlation end-to-end)?
+2. Tres cosas que Tor NO protege en su flow (usen §3.4).
+3. I2P: análisis conceptual basado en la intro oficial. No es obligatorio instalar I2P; quien quiera puede hacer un skim opcional, pero el memo se evalúa por el razonamiento, no por la instalación.
+4. Link de carnet: LAB #17 → THREAT.md + captura del circuit display (sin IPs completas).
+
+
+Entregable: notas del kickoff + THREAT.md.
+
+
+Fuera de alcance: guías para hostear onion services o eepsites; correr relays; evasión de controles institucionales; cualquier uso operativo para actividad ilícita. Si alguien pregunta “¿cómo escondo X de la policía?”, la respuesta de clase es: eso no es un threat model de producto, es otra conversación.
+
+
+---
+
+
+5. DEBATE — voto de postura y tally
+-----------------------------------
+
+
+Moción
+
+
+"Resolved: anonymity networks are a net gain for civil liberties, even though they enable harm."
+
+
+(En clase: “Las redes de anonimato son una ganancia neta para las libertades civiles, aunque habiliten daño.”)
+
+
+No debatan “¿Tor es cool?” ni “¿Tor es para criminales?”. Debatan si, pesando beneficiarios y víctimas, una infraestructura que esconde metadata expande libertades civiles más de lo que amplifica daño — anclando cada argumento en lo que la arquitectura realmente hace (qué ve el exit, qué permiten los onion services, qué asume Tor sobre el adversario).
+
+
+Menú de argumentos
+
+
+A FAVOR (ganancia neta para libertades civiles)
+
+
+F1 — La metadata es el arma del vigilante. Para periodistas, fuentes, sobrevivientes de abuso y disidentes, el peligro no es que lean el mensaje sino que sepan con quién hablaron. HTTPS no esconde eso; Tor sí reparte ese conocimiento para que ningún relay tenga origen y destino. Sin redes de anonimato, la protección de fuentes depende de que nadie en la red mire.
+
+
+F2 — La diversidad de usuarios es la seguridad. El propio Tor Project lo explica: Tor esconde a cada usuario entre los demás. Si solo los “sospechosos” usaran Tor, usarlo sería una señal. Una red usada por ONGs, empresas, periodistas y gente común protege precisamente a los vulnerables. Restringirla a casos “verificados” rompe la propiedad.
+
+
+F3 — El daño tiene otros canales; la víctima de vigilancia no. Los actores sofisticados tienen alternativas (infraestructura propia, jurisdicciones laxas, credenciales robadas). Quitar Tor afecta sobre todo a quien no tiene otra forma de no ser visto. Y Tor no defiende contra un adversario global: no es invisibilidad absoluta para el crimen, es protección práctica contra observadores locales.
+
+
+EN CONTRA (no es ganancia neta / el daño pesa más o el balance es indeterminado)
+
+
+A1 — Onion services cambian la economía del daño. Un servicio cuya ubicación no se revela es mucho más difícil de apagar o investigar. Eso protege a un medio independiente — y también a mercados de abuso. El daño concentrado en víctimas específicas (explotación, extorsión) no se compensa con beneficios difusos.
+
+
+A2 — El exit transfiere riesgo a terceros. El exit ve destino y, sin HTTPS, contenido; un exit malicioso puede espiar o alterar. Y el operador honesto del exit recibe las quejas de abuso por tráfico ajeno. La “libertad” de unos se financia con exposición legal de voluntarios y con riesgo para usuarios que creen estar protegidos.
+
+
+A3 — “Libertad civil” sin accountability no es libertad, es impunidad selectiva. Las libertades civiles incluyen el derecho de las víctimas a reparación. Si la arquitectura hace inviable identificar al agresor incluso con orden judicial, el sistema falla a esa víctima. La pregunta no es “anonimato sí o no” sino dónde va la identificación (KYC del proveedor, por ejemplo, como en 15-2026) — y eso ya no es “anonimato de red neto”.
+
+
+Cross-examination (muestra)
+
+
+- A F1: en su tabla del lab, ¿qué sigue viendo el guard? ¿Qué pasa con su argumento si el adversario controla la red nacional y el destino (correlation)?
+- A F2: si la protección depende de que muchos usen Tor, ¿por qué los sitios (bancos, por ejemplo) bloquean exits? ¿Eso no muestra que la red ya está marcada?
+- A F3: ¿“el daño tiene otros canales” subestima cuánto abarata Tor ciertos daños?
+- A A1: ¿su argumento también prueba demasiado contra el cifrado E2E (S21) o contra HTTPS? ¿Dónde está la línea?
+- A A2: si el usuario usa HTTPS, ¿qué queda del riesgo del exit malicioso? ¿Su argumento es contra Tor o contra HTTP sin cifrar?
+- A A3: si un PSAV hace KYC y el usuario entra por Tor, ¿hay impunidad? ¿O el anonimato de red y la identificación regulada conviven?
+
+
+Tally
+
+
+| | Pre-clase (bloqueada) | Post-cross-ex | ¿Se movió? | Razón declarada (1 frase) |
+|---|---|---|---|---|
+| A favor (F) | | | | |
+| En contra (A) | | | | |
+| Abstención | | | | |
+
+
+Reflexión post-tally: 120–180 palabras; citen al menos un hecho de arquitectura (qué ve el exit, guard estable, onion services, o “no defiende contra correlation”), un hallazgo de su circuit display y un borde legal o de libertad (protección de fuentes, víctimas, 15-2026).
+
+
+---
+
+
+6. VENTURE — memo: ¿anonimato, confidencialidad o ninguno?
+----------------------------------------------------------
+
+
+Arranca el spine de Módulo 10: privacy / identity como producto. Entregable (300–500 palabras):
+
+
+1. Diagnóstico: ¿su producto necesita (a) anonimato de usuarios (esconder quién usa el producto / con quién se relaciona), (b) confidencialidad del payload (esconder qué se envía), o (c) ninguno más allá de HTTPS estándar? Justifiquen con el data flow de THREAT.md.
+2. Usuario concreto: si (a), nombren al usuario que lo necesita (periodista, fuente, cliente en jurisdicción de vigilancia) y el adversario del que se esconde. “Todos merecen privacidad” no cuenta.
+3. Qué NO prometerán: al menos tres promesas que no harán (p. ej. “anonimato total”, “nadie puede saber que usas la app”, “protegido contra gobiernos”, “no guardamos nada” si son Persona Obligada).
+4. Qué SÍ pueden prometer con honestidad: una frase (p. ej. “aceptamos conexiones por Tor y no registramos IPs más allá de lo que exige ___”).
+5. Costo y quién paga: latencia, soporte, bloqueos de exits por terceros (pagos, antifraude), fricción en onboarding.
+6. Una oración 15-2026: “Si somos Persona Obligada, aceptar o usar Tor no cambia ___; si no lo somos, es porque ___.” Marquen lo que depende del reglamento pendiente del art. 127.
+
+
+Fuera: diseño de cifrado E2E (S21); pitch completo; opinión legal formal.
+
+
+---
+
+
+7. Diagramas de la sesión
+-------------------------
+
+
+Archivos locales en /workspace/cs031-sessions/s20-diagrams/. Subidos a la carpeta de sesiones CS031 en Drive (parent 1uf4FLxKm15B5Cdvz4pFSU55eXmDku7Sc).
+
+
+Diagrama 1 — Tor circuit: qué ve cada hop
+- Local: /workspace/cs031-sessions/s20-diagrams/07-tor-circuit-hops.png
+- Drive fileId: 13aNN8fzzWWeEa0IyB8OgjOPQr35i174P
+- URL: https://drive.google.com/file/d/13aNN8fzzWWeEa0IyB8OgjOPQr35i174P/view
+- Contenido: Cliente (Tor Browser) → Guard → Middle → Exit → sitio clearnet. Cifrado en capas (onion peeling). Bajo cada hop, tarjeta VE / NO VE (§3.3). Nota en el guard: estable 2–3 meses. Banda punteada: observador global / correlation fuera del threat model.
+
+
+Diagrama 2 — I2P garlic in-net vs Tor exit
+- Local: /workspace/cs031-sessions/s20-diagrams/08-i2p-vs-tor-exit.png
+- Drive fileId: 1vCNNtOCCOhB4GEue84FIS8paF3L2Oa2A
+- URL: https://drive.google.com/file/d/1vCNNtOCCOhB4GEue84FIS8paF3L2Oa2A/view
+- Contenido: panel Tor (circuito bidireccional + exit al clearnet) vs panel I2P (red cerrada, tunnels unidireccionales outbound/inbound, netDb leaseSet, garlic cloves). Caption: Tor optimizado para clearnet; I2P para servicios in-net.
+
+
+---
+
+
+8. Lectura extra
+----------------
+
+
+Core (verificadas, oficiales):
+
+
+- Tor — Overview: https://support.torproject.org/about-tor/how-tor-works/overview/
+- Tor — HTTPS encryption and Tor: https://support.torproject.org/about-tor/security/https-encryption-and-tor/
+- Tor — Types of relays: https://community.torproject.org/relay/types-of-relays/
+- I2P — A Scalable Framework for Anonymous Communication: https://i2p.net/en/docs/overview/intro/
+
+
+Go deeper:
+
+
+- Tor — Limitations and remaining attacks (correlation, timing, circuit reuse): https://support.torproject.org/about-tor/security/attacks-on-onion-routing/
+- Tor — What are Entry Guards?: https://support.torproject.org/about-tor/how-tor-works/entry-guards/
+- Tor Browser — Managing identities (circuit display, New Identity, New Tor Circuit): https://support.torproject.org/tor-browser/features/managing-identities/
+- Dingledine, Mathewson & Syverson, “Tor: The Second-Generation Onion Router” (USENIX Security 2004): https://www.usenix.org/legacy/publications/library/proceedings/sec04/tech/full_papers/dingledine/dingledine.pdf
+- Recap Decreto 15-2026 desde el paquete de S16. Iniciativa 6538 = no ley. Reglamento art. 127 = pendiente.
+
+
+---
+
+
+9. Dialogue journal
+-------------------
+
+
+250–350 palabras: después de ver su propio circuito en pantalla, ¿qué parte de su vida digital de esta semana revelaba más su metadata que su contenido? Relacionen ese ejemplo con la moción (libertad civil neta vs amplificador de daño) y con la decisión de su venture (anonimato / confidencialidad / ninguno). Incluyan una frase sobre qué seguiría viendo su venture de un usuario que llega por Tor si son Persona Obligada. Si su voto no se movió en el tally, digan qué hecho técnico (exit, guard, correlation, onion services) o qué caso real los habría movido.

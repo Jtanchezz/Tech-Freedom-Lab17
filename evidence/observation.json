@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-12",
+  "timezone": "America/Guatemala",
+  "network": "red de casa, confirmada por el estudiante",
+  "site": "https://polymarket.com/",
+  "before": {
+    "time": "21:33",
+    "guard": "Serbia",
+    "middle": "Estados Unidos",
+    "exit": "Suecia"
+  },
+  "after": {
+    "time": "21:34",
+    "guard": "Serbia",
+    "middle": "Suecia",
+    "exit": "Países Bajos"
+  },
+  "sameGuardIdentity": "no verificable en capturas con IPs tapadas",
+  "connected": true,
+  "instructorSiteConfirmed": false,
+  "defaultConfigurationConfirmed": false
+}

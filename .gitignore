@@ -1,0 +1,27 @@
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS, editors and tooling
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+.cache/
+__pycache__/
+.pytest_cache/
+node_modules/
+.npm/
+coverage/
+dist/
+build/
+*.tsbuildinfo
+
+# Temporary unredacted screenshots, if created later
+evidence/raw/
+evidence/unredacted/
